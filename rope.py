@@ -1,6 +1,7 @@
 from typing import Tuple
 import torch
 
+
 def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
     """
     Helper function to reshape frequency tensor to have the same shape as the target tensor 'x'
@@ -22,6 +23,7 @@ def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
     assert freqs_cis.shape == (x.shape[1], x.shape[-1])
     shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
     return freqs_cis.view(shape)
+
 
 def apply_rotary_emb(
     query: torch.Tensor,
@@ -61,15 +63,28 @@ def apply_rotary_emb(
     # This separates each query/key vector into its odd and even indices (assuming *one-indexing*).
     # query_real contains q_1, q_3, q_5, ... and query_imag contains q_2, q_4, q_6, ...
 
+    freqs = 1.0 / (theta ** (torch.arange(0, head_dim, 2)[: (head_dim // 2)].float() / head_dim))
+    t = torch.arange(seqlen, device=freqs.device)  # type: ignore
+    freqs = torch.outer(t, freqs).float()  # type: ignore
+
     # First, compute the trigonometric values in the second and fourth columns in
     # slide 22 (linked above).
+
+    sintheta = torch.sin(freqs)
+    costheta = torch.cos(freqs)
+
+    costheta = reshape_for_broadcast(costheta, query_real).to(query_real.device)
+    sintheta = reshape_for_broadcast(sintheta, query_real).to(query_real.device)
 
     # Then, combine these trigonometric values with the tensors query_real, query_imag,
     # key_real, and key_imag.
 
-    raise NotImplementedError
+    query_real_res = query_real * costheta - query_imag * sintheta
+    query_imag_res = query_real * sintheta + query_imag * costheta
+    key_real_res = key_real * costheta - key_imag * sintheta
+    key_imag_res = key_real * sintheta + key_imag * costheta
 
-    query_out = None
-    key_out = None
+    query_out = torch.stack([query_real_res, query_imag_res], dim=-1).flatten(3)
+    key_out = torch.stack([key_real_res, key_imag_res], dim=-1).flatten(3)
     # Return the rotary position embeddings for the query and key tensors
     return query_out, key_out
