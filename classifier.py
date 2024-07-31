@@ -42,6 +42,7 @@ class LlamaEmbeddingClassifier(torch.nn.Module):
 			elif config.option == 'finetune':
 				param.requires_grad = True
 
+
 		self.dropout = torch.nn.Dropout(config.hidden_dropout_prob)
 		self.classifier_head = torch.nn.Linear(self.llama.config.dim, self.num_labels)
 
